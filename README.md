@@ -18,6 +18,8 @@ as well).
 
 Type `python qglui.py` to run UI.
 
+![shuyak platform view](screenshots/ui_demo.png?raw=true "UI")
+
 # Dependencies
 
 Python3, PyYaml, PyQt5, PyOpenGL, numpy.
