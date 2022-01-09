@@ -103,22 +103,21 @@ class StewartPlatform(object):
         return pitch
 
     @staticmethod
-    def _yawn(phi):
-        yawn = np.eye(3)
+    def _yaw(phi):
+        yaw = np.eye(3)
         sin_phi, cos_phi = np.sin(phi), np.cos(phi)
-        yawn[1, 1] = cos_phi
-        yawn[2, 2] = cos_phi
-        yawn[1, 2] = -sin_phi
-        yawn[2, 1] = sin_phi
-
-        return yawn
+        yaw[1, 1] = cos_phi
+        yaw[2, 2] = cos_phi
+        yaw[1, 2] = -sin_phi
+        yaw[2, 1] = sin_phi
+        return yaw
 
     @staticmethod
     def _rotation_matrix(psi, theta, phi):
         roll = StewartPlatform._roll(psi)
         pitch = StewartPlatform._pitch(theta)
-        yawn = StewartPlatform._yawn(phi)
-        return np.dot(np.dot(roll, pitch), yawn)
+        yaw = StewartPlatform._yaw(phi)
+        return np.dot(np.dot(roll, pitch), yaw)
 
     def calc_leg_state(self, leg_index, translation, rot):
         q_relative = self.joints[leg_index]
