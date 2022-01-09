@@ -1,0 +1,61 @@
+base:
+        radius : 0.406
+        servos:
+                0:
+                        R: 0.422
+                        phi: 0.0
+                        alpha0: 180.0
+                1:
+                        R: 0.422
+                        phi: 60.0
+                        alpha0: 0.0
+                2:
+                        R: 0.422
+                        phi: 120.0
+                        alpha0: 180.0
+                3:
+                        R: 0.422
+                        phi: 180.0
+                        alpha0: 0.0
+                4:
+                        R: 0.422
+                        phi: 240.0
+                        alpha0: 180.0
+                5:
+                        R: 0.422
+                        phi: 300.0
+                        alpha0: 0.0
+platform:
+        joints:
+                0:
+                        R: 0.4
+                        phi: 20.0
+                1:
+                        R: 0.4
+                        phi: 40.0
+                2:
+                        R: 0.4
+                        phi: 140.0
+                3:
+                        R: 0.4
+                        phi: 160.0
+                4:
+                        R: 0.4
+                        phi: 260.0
+                5:
+                        R: 0.4
+                        phi: 280.0
+leg:
+        servo_length:
+                0.185
+        middle_length:
+                0.07
+        length:
+                0.66
+home_position:
+        translation:
+                [0.0, 0.0, 0.56]
+        rotation:
+                [0.0, 0.0, 0.0]
+constraints:
+        max_servo_angle : 85
