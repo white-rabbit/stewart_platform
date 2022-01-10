@@ -153,9 +153,16 @@ class StewartPlatform(object):
             acos_t = np.arccos(cos_t)
             atan_t = np.arctan(z / y)
 
+            # Note:
+            # atan_t is in [-0.5 * pi, 0.5 * pi] with period of pi
+            # acos_t is in [0, pi] with period of 2 * pi
+            # as cos(t) = cos(-t) we should use both acos_t, -acos_t
+            # so (atan_t + acos_t) is in [-1.5 * pi, 1.5 * pi] with period of pi
+            # as the home position for the servo could be equal to pi
+            # we should take into account shifts by pi and 2 * pi.
             possible_alphas = [atan_t + k1 * acos_t + k2 * np.pi
                                for k1 in [-1.0, 1.0]
-                               for k2 in [0.0, 1]]
+                               for k2 in [0.0, 1.0, 2.0]]
         else:
             assert z != 0
             sin_t = gamma / z
@@ -163,7 +170,13 @@ class StewartPlatform(object):
                 return None, None, None
             
             asin_t = np.arcsin(sin_t)
-            possible_alphas = [asin_t, asin_t + np.pi]
+
+            # Note:
+            # asin_t is in [-pi/2, pi/2] with 2 * pi period
+            # as the home position for the servo could be equal to pi
+            # (asin_t + 2 * pi) is in [1.5 * pi, 2.5 * pi] so we also
+            # should take it into account shift by 2 * pi.
+            possible_alphas = [asin_t, asin_t + 2.0 * np.pi]
 
         def check_alpha(alpha):
             servo_shift = np.array([0, np.cos(alpha) * a, np.sin(alpha) * a])
