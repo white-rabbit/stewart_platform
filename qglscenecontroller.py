@@ -35,7 +35,7 @@ class QGLSceneController(QOpenGLWidget):
         return QSize(60, 40)
 
     def sizeHint(self):
-        return QSize(600, 400)
+        return QSize(800, 700)
 
     def calcMatrixRotation(self):
         gl.glPushMatrix()

@@ -16,6 +16,18 @@ PlatformState = collections.namedtuple(
     ])
 
 
+TranslationArea = collections.namedtuple(
+    'TranslationArea',
+    [
+        'x_grid',
+        'y_grid',
+        'z_min_grid',
+        'z_max_grid',
+        'not_empty',
+        'box',
+    ])
+
+
 class StewartPlatform(object):
     """ 
              
@@ -66,6 +78,8 @@ class StewartPlatform(object):
             return [r * np.cos(phi), r * np.sin(phi), 0.0] 
 
         self.alpha0 = []
+        self.to_servo = []
+        self.to_world = []
         for i in range(6):
             assert i in config['base']['servos']
             servo = config['base']['servos'][i]
@@ -77,6 +91,9 @@ class StewartPlatform(object):
             self.joints[i] = from_polar_cfg(joint, 0.0)
             assert 'alpha0' in servo
             self.alpha0.append(self._to_radian(servo['alpha0']))
+
+            self.to_servo.append(self._roll(-self.servo_psi[i]))
+            self.to_world.append(self._roll(self.servo_psi[i]))
 
     @staticmethod
     def _to_radian(degree):
@@ -130,10 +147,10 @@ class StewartPlatform(object):
             return None, None, None
 
         # relatively leg_index-th servo coordinate system
-        r_to_servo =  self._roll(-self.servo_psi[leg_index])
-        q = np.dot(r_to_servo, q_world)
+        to_servo = self.to_servo[leg_index]
+        q = np.dot(to_servo, q_world)
 
-        b = np.dot(r_to_servo, self.servos[leg_index])
+        b = np.dot(to_servo, self.servos[leg_index])
         assert abs(b[1]) < EPS
         assert abs(b[2]) < EPS
 
@@ -176,13 +193,13 @@ class StewartPlatform(object):
             # as the home position for the servo could be equal to pi
             # (asin_t + 2 * pi) is in [1.5 * pi, 2.5 * pi] so we also
             # should take it into account shift by 2 * pi.
-            possible_alphas = [asin_t, asin_t + 2.0 * np.pi]
+            possible_alphas = [asin_t, asin_t + np.pi * 2]
 
         def check_alpha(alpha):
             servo_shift = np.array([0, np.cos(alpha) * a, np.sin(alpha) * a])
             point_c_rel = b + servo_shift
             point_b_rel = point_c_rel - [self.middle_length, 0, 0]
-            return (np.linalg.norm(point_c_rel - q) - self.leg_length) < EPS
+            return abs(np.linalg.norm(point_c_rel - q) - self.leg_length) < EPS
 
         alphas = [alpha for alpha in possible_alphas if check_alpha(alpha)]
         if not alphas:
@@ -192,18 +209,22 @@ class StewartPlatform(object):
 
         alpha = sorted(alphas,
             key=lambda a: abs(a - self.alpha0[leg_index]))[0]
+
+
+        if abs(alpha - self.alpha0[leg_index]) > self.max_servo_angle:
+            return None, None, None
         
         servo_shift = np.array([0, np.cos(alpha) * a, np.sin(alpha) * a])        
         point_c_rel = b + servo_shift
         point_b_rel = point_c_rel - [self.middle_length, 0, 0]
-        back_to_world = self._roll(self.servo_psi[leg_index])
+        back_to_world = self.to_world[leg_index]
         
         point_c_world = np.dot(back_to_world, point_c_rel)
         point_b_world = np.dot(back_to_world, point_b_rel)
         return alpha, point_b_world, point_c_world
 
     def calc_state(self, translation, rotation):
-        rot = self._rotation_matrix(*rotation)
+        rot = self._rotation_matrix(rotation[0], rotation[1], rotation[2])
 
         base = (self.base_radius, np.array([0.0, 0.0, 0.0]))
 
@@ -212,6 +233,7 @@ class StewartPlatform(object):
             q_relative = self.joints[leg_index]
             q_world = translation + np.dot(rot, q_relative)
             platform.append(q_world)
+        platform = np.array(platform)
 
         legs = []
         angles = []
@@ -228,6 +250,81 @@ class StewartPlatform(object):
 
         return PlatformState(base, servos, platform, legs, angles)
 
+    def check_state_is_possible(self, translation, rotation_matrix):
+        for i in range(6):
+            alpha, point_b, point_c = self.calc_leg_state(
+                i, translation, rotation_matrix)
+            if alpha is None:
+                return False
+        return True
+
+    def calc_possible_translations(self, rotation, n=20, progress_callback=None):
+        rot = self._rotation_matrix(rotation[0], rotation[1], rotation[2])
+
+        max_shift = self.servo_length + self.leg_length
+
+        surface_delta = self.leg_length
+        min_x = self.home_translation[0] - surface_delta
+        max_x = self.home_translation[0] + surface_delta
+        min_y = self.home_translation[1] - surface_delta
+        max_y = self.home_translation[1] + surface_delta
+        min_z = self.leg_length - self.servo_length
+        max_z = self.leg_length + self.servo_length
+
+        dz = (max_z - min_z) / (3 * n)
+        upper_z = np.zeros((n, n), np.float32)
+        lower_z = np.zeros((n, n), np.float32)
+        not_empty = np.zeros((n, n), np.bool)
+
+        minimax = np.zeros((2, 3), np.float32)
+        minimax[0] = 1e9
+        minimax[1] = -1e9
+
+        x_grid = np.linspace(min_x, max_x, n)
+        y_grid = np.linspace(min_y, max_y, n)
+
+        for i, x in enumerate(x_grid):
+            if progress_callback is not None:
+                progress_callback(i)
+            for j, y in enumerate(y_grid):
+                z = max_z
+
+                not_found = False
+                while not self.check_state_is_possible([x, y, z], rot):
+                    z -= dz
+                    if z < min_z:
+                        not_found = True
+                        break
+
+                if not_found:
+                    continue
+
+                not_empty[i, j] = True
+
+                upper_z[i, j] = z
+
+                while self.check_state_is_possible([x, y, z], rot):
+                    minimax[0][2] = min(minimax[0][2], z)
+                    minimax[1][2] = max(minimax[1][2], z)
+                    z -= dz
+
+                z += dz
+                lower_z[i, j] = z
+
+                minimax[0][0] = min(minimax[0][0], x)
+                minimax[0][1] = min(minimax[0][1], y)
+
+                minimax[1][0] = max(minimax[1][0], x)
+                minimax[1][1] = max(minimax[1][1], y)
+
+        if progress_callback is not None:
+            progress_callback(n)
+
+        #print("LIMITS ", (minimax[1] - minimax[0]) * 100.0, "cm")
+
+        return TranslationArea(x_grid, y_grid, lower_z, upper_z, not_empty, minimax)
+
+
 
 if __name__ == '__main__':
     cfg = yaml.load(open('configs/platform_shuyak.yml', 'r'))
@@ -240,5 +337,5 @@ if __name__ == '__main__':
 
     assert all(state.angles)
 
-    # todo(savegor): add several geomtry tests
+    # todo(savegor): add several geometry tests
 
