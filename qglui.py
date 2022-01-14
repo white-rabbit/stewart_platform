@@ -92,7 +92,7 @@ class ApplicationWindow(QWidget):
     def computePossibleTranslations(self):
         self.thread = QThread(parent=self)
 
-        size = 100
+        size = 40
         compute_callback = lambda progress_cb: self.glWidget.computePossibleTranslations(
             size, progress_cb)
         self.backgroundProcess = BackgroundProcess(compute_callback)
@@ -101,7 +101,7 @@ class ApplicationWindow(QWidget):
         self.backgroundProcess.finished.connect(self.backgroundProcessFinished)
         self.backgroundProcess.progress.connect(self.progressBar.setValue)
 
-        for i in xrange(3):
+        for i in range(3):
             self._sliders[i].setEnabled(False)
 
         self.showButton.setEnabled(False)
@@ -115,7 +115,7 @@ class ApplicationWindow(QWidget):
 
 
     def backgroundProcessFinished(self):
-        for i in xrange(3):
+        for i in range(3):
             self._sliders[i].setEnabled(True)
 
         self.showButton.setEnabled(True)
